@@ -1,0 +1,26 @@
+# Ignore all downloaded image formats
+*.webp
+*.jpg
+*.jpeg
+*.png
+*.avif
+
+# Ignore the activity log file
+activity.log
+
+# Ignore all folders created by the scraper 
+# (This assumes your code creates folders with car titles)
+# Since those folders don't have extensions, we ignore everything 
+# that isn't a script or config file.
+**/
+!/.gitignore
+!/scraper.py
+!/README.md
+!/requirements.txt
+
+# Python environment & cache
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
