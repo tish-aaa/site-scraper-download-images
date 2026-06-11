@@ -53,10 +53,15 @@ foreach ($resultLinks as $link) {
     if ($processedCount >= $maxResults) break;
 
     $relativeUrl = $link->getAttribute('href');
-    $fullUrl = str_starts_with($relativeUrl, 'http') ? $relativeUrl : $baseUrl . $relativeUrl;
-    $title = trim($link->nodeValue);
+    if (empty($relativeUrl)) continue;
+
+    $parsedBase = parse_url($baseUrl);
+    $hostUrl = $parsedBase['scheme'] . "://" . $parsedBase['host'];
     
-    // Clean Title for Folder Name
+    $fullUrl = str_starts_with($relativeUrl, 'http') ? $relativeUrl : $hostUrl . $relativeUrl;
+    
+    $title = trim($link->nodeValue) ?: "listing_" . uniqid();
+    
     $folderName = preg_replace('/[^A-Za-z0-9 _-]/', '', $title);
     if (!is_dir($folderName)) {
         mkdir($folderName, 0777, true);
@@ -71,7 +76,7 @@ foreach ($resultLinks as $link) {
         @$itemDom->loadHTML($itemHtml);
         $itemXpath = new DOMXPath($itemDom);
 
-        // 4. FIND CAROUSEL IMAGES (Update IDs/Classes as needed)
+        // 4. FIND CAROUSEL IMAGES
         $images = $itemXpath->query("//div[contains(@id, 'carousel')]//img");
         
         $imgCount = 1;
@@ -87,13 +92,13 @@ foreach ($resultLinks as $link) {
                 $imgCount++;
             }
             
-            usleep(500000); // 0.5 second pause between individual images
+            usleep(500000); // 0.5 second pause between individual images to avoid getting recognised as a bot
         }
     }
 
     $processedCount++;
     logger("Waiting $delaySeconds seconds before next result...", $logFile);
-    sleep($delaySeconds); // "Polite" pause between search results
+    sleep($delaySeconds); // pause between search results
 }
 
 logger("--- Task Finished Successfully ---", $logFile);
