@@ -58,34 +58,49 @@ def run_scraper(category):
             # Process first 5 unique links
             for link in links[:5]:
                 full_url = link if "http" in link else f"{BASE_URL}{link}"
-                page.goto(full_url)
-                page.wait_for_load_state("networkidle")
                 
-                title = slugify(page.title())
-                if not os.path.exists(title):
-                    os.makedirs(title)
-
-                print(f"Downloading images for: {title}")
-                page.mouse.wheel(0, 500) # Scroll to trigger lazy-load
-                time.sleep(2)
-
-                imgs = page.query_selector_all('img')
-                count = 1
-                for img in imgs:
-                    src = img.get_attribute('src')
-                    # Generalize image filtering (usually car sites use 'photos' or 'media')
-                    if src and "http" in src and any(k in src.lower() for k in ["photos", "images", "media"]):
-                        try:
-                            ext = os.path.splitext(urlparse(src).path)[1] or ".webp"
-                            response = page.request.get(src)
-                            with open(f"{title}/{count}{ext}", "wb") as f:
-                                f.write(response.body())
-                            count += 1
-                        except:
-                            continue
+                # FIX: Spawn a clean, separate page instance instead of moving back/forward
+                detail_page = context.new_page()
+                apply_stealth(detail_page)
                 
-                print(f"Finished. Saved {count-1} images.")
-                page.go_back()
+                try:
+                    detail_page.goto(full_url, timeout=30000)
+                    detail_page.wait_for_load_state("networkidle")
+                    
+                    # Ensure title generation has an automated safe layout string fallback
+                    raw_title = detail_page.title()
+                    title = slugify(raw_title) if slugify(raw_title) else f"item_{int(time.time())}"
+                    
+                    if not os.path.exists(title):
+                        os.makedirs(title)
+
+                    print(f"Downloading images for: {title}")
+                    detail_page.mouse.wheel(0, 500)
+                    time.sleep(2)
+
+                    imgs = detail_page.query_selector_all('img')
+                    count = 1
+                    for img in imgs:
+                        src = img.get_attribute('src')
+                        if src and "http" in src and any(k in src.lower() for k in ["photos", "images", "media"]):
+                            try:
+                                ext = os.path.splitext(urlparse(src).path)[1] or ".webp"
+                                response = detail_page.request.get(src)
+                                with open(f"{title}/{count}{ext}", "wb") as f:
+                                    f.write(response.body())
+                                count += 1
+                            except:
+                                continue
+                                
+                    print(f"Finished. Saved {count-1} images.")
+                
+                except Exception as loop_error:
+                    print(f"Skipping listing due to runtime link exception: {loop_error}")
+                
+                finally:
+                    # Explicitly dispose of the tab to release background memory contexts
+                    detail_page.close()
+                
                 time.sleep(random.uniform(2, 4))
 
         except Exception as e:
