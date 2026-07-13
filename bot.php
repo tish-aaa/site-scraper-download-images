@@ -1,10 +1,10 @@
 <?php
 // --- CONFIGURATION ---
-$searchQuery = $argv[1] ?? ''; // Use terminal argument or default
-$baseUrl = "https://www.donedeal.ie/cars";         // CHANGE THIS to the target site
-$searchUrl = $baseUrl . "+" . $searchQuery;
+$searchQuery = $argv[1] ?? ''; // kept for reference, but this site's search box doesn't actually filter results
+$baseUrl = "https://books.toscrape.com/catalogue/category/books_1/index.html"; // all-books listing page
+$searchUrl = $baseUrl; // no query appended — see note above
 $logFile = "activity.log";
-$maxResults = 5;       // Safety limit: only process first 5 search results
+$maxResults = 5;       // Safety limit: only process first 5 results
 $delaySeconds = 2;     // "Polite" delay to act like a human
 
 // --- LOGGER FUNCTION ---
@@ -34,7 +34,7 @@ $context = stream_context_create([
     ]
 ]);
 
-// 1. FETCH SEARCH PAGE
+// 1. FETCH LISTING PAGE
 $searchHtml = @file_get_contents($searchUrl, false, $context);
 if (!$searchHtml) {
     logger("FATAL: Could not reach $baseUrl. Check your internet or URL.", $logFile);
@@ -45,8 +45,8 @@ $dom = new DOMDocument();
 @$dom->loadHTML($searchHtml);
 $xpath = new DOMXPath($dom);
 
-// 2. FIND RESULT LINKS (Update '@class' to match the site's actual HTML)
-$resultLinks = $xpath->query("//a[contains(@class, 'result-link')]");
+// 2. FIND RESULT LINKS — each book's title link inside <h3><a>
+$resultLinks = $xpath->query("//h3/a");
 $processedCount = 0;
 
 foreach ($resultLinks as $link) {
@@ -55,12 +55,10 @@ foreach ($resultLinks as $link) {
     $relativeUrl = $link->getAttribute('href');
     if (empty($relativeUrl)) continue;
 
-    $parsedBase = parse_url($baseUrl);
-    $hostUrl = $parsedBase['scheme'] . "://" . $parsedBase['host'];
-    
-    $fullUrl = str_starts_with($relativeUrl, 'http') ? $relativeUrl : $hostUrl . $relativeUrl;
-    
-    $title = trim($link->nodeValue) ?: "listing_" . uniqid();
+    // books.toscrape.com links are relative to /catalogue/, not the raw domain
+    $fullUrl = "https://books.toscrape.com/catalogue/" . ltrim(str_replace('../', '', $relativeUrl), '/');
+
+    $title = trim($link->getAttribute('title')) ?: (trim($link->nodeValue) ?: "listing_" . uniqid());
     
     $folderName = preg_replace('/[^A-Za-z0-9 _-]/', '', $title);
     if (!is_dir($folderName)) {
@@ -76,13 +74,15 @@ foreach ($resultLinks as $link) {
         @$itemDom->loadHTML($itemHtml);
         $itemXpath = new DOMXPath($itemDom);
 
-        // 4. FIND CAROUSEL IMAGES
-        $images = $itemXpath->query("//div[contains(@id, 'carousel')]//img");
+        // 4. FIND COVER IMAGE — sits inside the image_container div
+        $images = $itemXpath->query("//div[contains(@class, 'image_container')]//img");
         
         $imgCount = 1;
         foreach ($images as $img) {
             $imgUrl = $img->getAttribute('src');
-            if (!str_starts_with($imgUrl, 'http')) $imgUrl = $baseUrl . $imgUrl;
+            if (!str_starts_with($imgUrl, 'http')) {
+                $imgUrl = "https://books.toscrape.com/" . ltrim(str_replace('../', '', $imgUrl), '/');
+            }
 
             // Download and Save
             $imgData = @file_get_contents($imgUrl, false, $context);
@@ -98,7 +98,7 @@ foreach ($resultLinks as $link) {
 
     $processedCount++;
     logger("Waiting $delaySeconds seconds before next result...", $logFile);
-    sleep($delaySeconds); // pause between search results
+    sleep($delaySeconds); // pause between results
 }
 
 logger("--- Task Finished Successfully ---", $logFile);
