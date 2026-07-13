@@ -1,22 +1,25 @@
-# Ignore all downloaded image formats
+# Ignore all downloaded image formats (scraped product images)
 *.webp
 *.jpg
 *.jpeg
-*.png
 *.avif
+
+# Ignore PNGs everywhere EXCEPT the screenshots folder
+*.png
+!/screenshots/*.png
 
 # Ignore the activity log file
 activity.log
 
-# Ignore all folders created by the scraper 
-# (This assumes your code creates folders with car titles)
-# Since those folders don't have extensions, we ignore everything 
-# that isn't a script or config file.
+# Ignore all folders by default (scraper output folders)...
 **/
+# ...except these
 !/.gitignore
 !/scraper.py
+!/bot.php
 !/README.md
 !/requirements.txt
+!/screenshots/
 
 # Python environment & cache
 __pycache__/
